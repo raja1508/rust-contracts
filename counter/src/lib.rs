@@ -51,12 +51,23 @@ pub fn process_instructions(
     
     let data = match instruction {
         InstructionData::Initialize => {
-            let counter = Counter{
-                count: 0
+            let data = counter_account.data.borrow();
+            let parse: Result<Counter, std::io::Error> = Counter::try_from_slice(&data); 
+
+            if let Ok(_) = parse {
+                return Err(ProgramError::AccountAlreadyInitialized)
+            }
+
+            let counter = Counter {
+                count: 0,
             }; 
             counter
+
         },
         _ => {
+            if counter_account.data_len() < std::mem::size_of::<u32>() {
+                return Err(ProgramError::AccountDataTooSmall);
+            }
             let data = counter_account.data.borrow();
             let mut counter : Counter = Counter::try_from_slice(&data)?; 
             process_counter(&mut counter, instruction)? 
@@ -71,14 +82,17 @@ pub fn process_instructions(
 }
 
 fn process_counter(counter: &mut Counter, instruction: InstructionData ) -> Result<Counter, ProgramError>{
+    
     match instruction {
         InstructionData::Increase(value) => {
-            let x = counter.count.checked_add(value).unwrap(); 
+            let x = counter.count.checked_add(value)
+            .ok_or(ProgramError::ArithmeticOverflow)?; 
             counter.count = x;
             return Ok(counter.clone()) 
         },
         InstructionData::Decrease(value) => {
-            let x = counter.count.checked_sub(value).unwrap(); 
+            let x = counter.count.checked_sub(value)
+            .ok_or(ProgramError::InvalidArgument)?; 
             counter.count = x; 
             return Ok(counter.clone())
         },
